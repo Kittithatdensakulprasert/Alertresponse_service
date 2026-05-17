@@ -41,44 +41,6 @@ Partner Services (Incident Reporter, Impact Zones)
 
 ---
 
-## 🚀 Quick Start
-
-### Prerequisites
-
-- AWS Account
-- AWS CLI configured
-- Node.js >= 18.x
-- DynamoDB tables created (AlertData, ResponseData, Incidents, UserLocations)
-
-### Installation
-
-1. **Clone repository**
-```bash
-git clone <your-repo>
-cd Alertresponse_service
-```
-
-2. **Install dependencies**
-```bash
-cd src
-npm install
-```
-
-3. **Deploy Lambda functions**
-```bash
-# Deploy each Lambda function using AWS Console or AWS CLI
-# Or use deployment script if available
-```
-
-4. **Configure environment variables**
-```bash
-# Set required environment variables for each Lambda:
-# - SQS_QUEUE_URL
-# - AWS_REGION
-```
-
----
-
 ## 📡 API Endpoints
 
 **Base URL**: `https://<api-id>.execute-api.us-east-1.amazonaws.com/v1`
