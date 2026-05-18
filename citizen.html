@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบรับแจ้งเตือนภัยแห่งชาติ</title>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0056b3;
+            --danger: #d93025;
+            --success: #1e8e3e;
+            --bg: #f8f9fa;
+        }
+
+        body {
+            font-family: 'Prompt', sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+            transition: background 0.3s;
+        }
+
+        .gov-bar {
+            width: 100%;
+            background: #000;
+            color: #fff;
+            padding: 8px 0;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        .container {
+            background: white;
+            width: 90%;
+            max-width: 400px;
+            margin-top: 30px;
+            padding: 30px 25px;
+            border-radius: 24px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            position: relative;
+        }
+
+        h1 { font-size: 1.5rem; margin-bottom: 10px; }
+        p { color: #666; font-size: 0.95rem; margin-bottom: 20px; }
+
+        .input-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #444;
+        }
+
+        input[type="tel"] {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            font-size: 1.2rem;
+            font-family: 'Prompt', sans-serif;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        input[type="tel"]:focus {
+            border-color: var(--primary);
+        }
+
+        .alert-card {
+            border-radius: 16px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+            border: 3px solid var(--danger);
+            background: #fff5f5;
+            transition: all 0.3s ease;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            background: var(--danger);
+            color: white;
+        }
+
+        .response-group {
+            display: grid;
+            gap: 12px;
+            margin-top: 25px;
+        }
+
+        .btn {
+            border: none;
+            padding: 18px;
+            border-radius: 15px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { background: var(--primary); }
+        .btn-safe { background: var(--success); }
+        .btn-ack { background: #5f6368; }
+        .btn-help { background: var(--danger); }
+
+        .flash-bg { animation: flashRed 1.0s infinite; }
+        @keyframes flashRed {
+            0%, 100% { background: #f8f9fa; }
+            50% { background: #ffcccc; }
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+    </style>
+</head>
+
+<body id="body-tag">
+    <div class="gov-bar">ระบบแจ้งเตือนภัยพิบัติแห่งชาติ (INTEGRATED VERSION)</div>
+
+    <div class="container" id="login-zone">
+        <div style="font-size: 4rem; margin-bottom: 20px;">📱</div>
+        <h1>ระบุเบอร์โทรศัพท์</h1>
+        <p>เพื่อรับการแจ้งเตือนภัยในพื้นที่ของคุณ</p>
+        <div class="input-group">
+            <label for="phone-input">เบอร์โทรศัพท์มือถือของคุณ</label>
+            <input type="tel" id="phone-input" placeholder="0XXXXXXXXX" maxlength="10">
+        </div>
+        <button class="btn btn-primary" onclick="startStandby()">เข้าใช้งาน</button>
+    </div>
+
+    <div class="container" id="standby-zone" style="display:none;">
+        <div id="radar-icon" style="font-size: 4rem; margin-bottom: 20px; animation: pulse 2s infinite">🛰️</div>
+        <h2 style="color:var(--success)">เฝ้าระวังภัยพิบัติ</h2>
+        <p>กำลังติดตามสถานการณ์ในพื้นที่ของคุณแบบ Real-time</p>
+        <div id="display-phone" style="font-weight:600; background:#eee; padding:10px; border-radius:8px;"></div>
+    </div>
+
+    <div class="container" id="alert-zone" style="display:none;">
+        <h2 id="alert-main-title" style="color:var(--danger); margin:0;">🚨 ประกาศแจ้งเตือนด่วน</h2>
+        <div class="alert-card" id="main-card">
+            <div class="status-badge" id="alert-severity">HIGH</div>
+            <div id="alert-title" style="font-weight: bold; margin-bottom: 5px;">ประเภท: -</div>
+            <div id="alert-text" style="font-size: 1.1rem; color: #d93025;">กำลังโหลด...</div>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+            <div id="alert-location" style="font-size: 0.9rem; color: #666;">📍 พิกัด: -</div>
+        </div>
+        <div class="response-group" id="btn-group"></div>
+    </div>
+
+    <div class="container" id="success-zone" style="display:none;">
+        <div style="font-size: 5rem; color: var(--success);">✓</div>
+        <h2>ส่งข้อมูลแล้ว</h2>
+        <p>ศูนย์บัญชาการได้รับสถานะของคุณแล้ว โปรดรอฟังประกาศเพิ่มเติม</p>
+        <button class="btn btn-ack" onclick="resetToStandby()">กลับสู่หน้าเฝ้าระวัง</button>
+    </div>
+
+    <script>
+        const API_BASE_URL = "https://1y2hd4pope.execute-api.us-east-1.amazonaws.com/v1";
+        let currentAlertId = null;
+        let currentAlertStatus = null;
+        let myPhoneNumber = "";
+        let audioCtx = null;
+        let alarmInterval = null;
+        let handledAlertIds = new Set(); 
+
+        function startStandby() {
+            const input = document.getElementById('phone-input').value;
+            if (input.length < 9) {
+                alert("กรุณาระบุเบอร์โทรศัพท์ให้ถูกต้อง");
+                return;
+            }
+            myPhoneNumber = input;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            document.getElementById('login-zone').style.display = 'none';
+            document.getElementById('standby-zone').style.display = 'block';
+            document.getElementById('display-phone').innerText = "เบอร์ของคุณ: " + myPhoneNumber;
+
+            setInterval(checkForAlerts, 3000);
+            checkForAlerts();
+        }
+
+        async function checkForAlerts() {
+            try {
+                const res = await fetch(`${API_BASE_URL}/alerts/latest?phone=${myPhoneNumber}&t=${Date.now()}`);
+                if (!res.ok) return;
+
+                const alertData = await res.json();
+                if (!alertData) return;
+
+                const incomingId = alertData.alertId || alertData.incidentId;
+
+                // --- จุดแก้ไข 1: บันทึกข้อมูลทันทีที่มีการแจ้งเตือน (ALERTED) ---
+                if (alertData.status === "ALERTED") {
+                    // ดึงค่าที่ดีที่สุดที่มีในขณะนั้นมาเก็บไว้
+                    const typeToSave = alertData.incidentTypeSnapshot || alertData.incidentType || alertData.type;
+                    const locToSave = alertData.locationSnapshot || alertData.location;
+                    
+                    if (typeToSave) localStorage.setItem('last_alert_type', typeToSave);
+                    if (locToSave) localStorage.setItem('last_alert_loc', locToSave);
+                    
+                    if (incomingId !== currentAlertId || currentAlertStatus !== "ALERTED") {
+                        currentAlertId = incomingId;
+                        currentAlertStatus = "ALERTED";
+                        triggerAlarm(alertData);
+                    }
+                } 
+                // --- จุดแก้ไข 2: เมื่อสถานะเป็น RESOLVED ให้ดึงค่าจากที่บันทึกไว้มาใช้ ---
+                else if (alertData.status === "RESOLVED") {
+                    if (currentAlertId !== incomingId || currentAlertStatus !== "RESOLVED") {
+                        currentAlertId = incomingId;
+                        currentAlertStatus = "RESOLVED";
+                        showResolvedUI(alertData);
+                    }
+                }
+            } catch (e) {
+                console.log("Connecting...");
+            }
+        }
+
+        function showResolvedUI(alertData) {
+            stopAlarm(); 
+            document.getElementById('body-tag').classList.remove('flash-bg');
+            document.getElementById('standby-zone').style.display = 'none';
+            document.getElementById('success-zone').style.display = 'none';
+            document.getElementById('alert-zone').style.display = 'block';
+
+            const mainTitle = document.getElementById('alert-main-title');
+            mainTitle.innerText = "✅ สถานการณ์คลี่คลาย";
+            mainTitle.style.color = "var(--success)";
+            
+            const card = document.getElementById('main-card');
+            card.style.borderColor = "var(--success)";
+            card.style.background = "#f0fff4";
+            
+            // ดึงค่าจาก localStorage มาแสดงผล (ถ้าไม่มีจริงๆ ถึงจะใช้ค่าจาก alertData)
+            const displayType = localStorage.getItem('last_alert_type') || alertData.incidentTypeSnapshot || "ภัยพิบัติ";
+            const displayLoc = localStorage.getItem('last_alert_loc') || alertData.locationSnapshot || "ในพื้นที่";
+
+            document.getElementById('alert-title').innerText = "ประเภทภัย: " + displayType;
+            document.getElementById('alert-location').innerText = "📍 พิกัด: " + displayLoc;
+            
+            document.getElementById('alert-text').innerText = alertData.message || "ขณะนี้เหตุการณ์เข้าสู่ภาวะปกติแล้ว โปรดตรวจสอบความปลอดภัยรอบตัวท่าน";
+            document.getElementById('alert-text').style.color = "var(--success)";
+            
+            const badge = document.getElementById('alert-severity');
+            badge.innerText = "RESOLVED";
+            badge.style.background = "var(--success)";
+            
+            const btnGroup = document.getElementById('btn-group');
+            btnGroup.style.display = 'grid';
+            btnGroup.innerHTML = `
+                <button class="btn btn-safe" onclick="markAsHandledAndExit()">
+                    รับทราบและกลับสู่หน้าเฝ้าระวัง
+                </button>
+            `;
+            playResolvedSound();
+        }
+
+        function markAsHandledAndExit() {
+            // ล้างข้อมูลเฉพาะเมื่อกดรับทราบการคลี่คลายแล้วเท่านั้น
+            localStorage.removeItem('last_alert_type');
+            localStorage.removeItem('last_alert_loc');
+            if (currentAlertId) handledAlertIds.add(currentAlertId);
+            resetToStandby();
+        }
+
+        function triggerAlarm(alertData) {
+            document.getElementById('body-tag').classList.add('flash-bg');
+            document.getElementById('standby-zone').style.display = 'none';
+            document.getElementById('success-zone').style.display = 'none';
+            document.getElementById('alert-zone').style.display = 'block';
+
+            const mainTitle = document.getElementById('alert-main-title');
+            mainTitle.innerText = "🚨 ประกาศแจ้งเตือนด่วน";
+            mainTitle.style.color = "var(--danger)";
+            
+            const card = document.getElementById('main-card');
+            card.style.borderColor = "var(--danger)";
+            card.style.background = "#fff5f5";
+            
+            // ใช้ Logic เดียวกันกับหน้า Resolved เพื่อความแม่นยำ
+            const displayType = alertData.incidentTypeSnapshot || alertData.incidentType || alertData.type || "เหตุฉุกเฉิน";
+            const displayLocation = alertData.locationSnapshot || alertData.location || "ไม่ระบุพิกัด";
+
+            document.getElementById('alert-title').innerText = "ประเภทภัย: " + displayType;
+            document.getElementById('alert-location').innerText = "📍 พิกัด: " + displayLocation;
+            
+            document.getElementById('alert-text').innerText = alertData.message || "แจ้งเตือนด่วน";
+            document.getElementById('alert-text').style.color = "#d93025";
+            
+            const badge = document.getElementById('alert-severity');
+            badge.innerText = alertData.severitySnapshot || alertData.severity || "HIGH";
+            badge.style.background = "var(--danger)";
+            
+            const btnGroup = document.getElementById('btn-group');
+            btnGroup.style.display = 'grid';
+            btnGroup.innerHTML = `
+                <button class="btn btn-safe" onclick="sendReply('SAFE', this)">1 = ฉันปลอดภัย</button>
+                <button class="btn btn-ack" onclick="sendReply('ACKNOWLEDGE', this)">2 = รับทราบข้อมูล</button>
+                <button class="btn btn-help" onclick="sendReply('NEED_HELP', this)">3 = ขอความช่วยเหลือ</button>
+            `;
+
+            if (!alarmInterval) startAlarm();
+        }
+
+        function markAsHandledAndExit() {
+            if (currentAlertId) handledAlertIds.add(currentAlertId);
+            resetToStandby();
+        }
+
+        function resetToStandby() {
+            stopAlarm();
+            document.getElementById('success-zone').style.display = 'none';
+            document.getElementById('alert-zone').style.display = 'none';
+            document.getElementById('standby-zone').style.display = 'block';
+        }
+
+        async function sendReply(choice, btnElement) {
+            try {
+                const res = await fetch(`${API_BASE_URL}/alerts/${currentAlertId}/responses`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phoneNumber: myPhoneNumber, replyText: choice })
+                });
+
+                if (res.ok || res.status === 409) {
+                    handledAlertIds.add(currentAlertId);
+                    stopAlarm();
+                    document.getElementById('alert-zone').style.display = 'none';
+                    document.getElementById('success-zone').style.display = 'block';
+                }
+            } catch (e) {
+                alert("เกิดข้อผิดพลาดในการส่งข้อมูล");
+            }
+        }
+
+        function startAlarm() {
+            if (alarmInterval) clearInterval(alarmInterval);
+            const beep = () => {
+                if (!audioCtx) return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+            };
+            beep();
+            alarmInterval = setInterval(beep, 800);
+        }
+
+        function stopAlarm() {
+            if (alarmInterval) { clearInterval(alarmInterval); alarmInterval = null; }
+            document.getElementById('body-tag').classList.remove('flash-bg');
+        }
+
+        function playResolvedSound() {
+            if (!audioCtx) return;
+            const playNote = (delay) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, audioCtx.currentTime + delay);
+                gain.gain.setValueAtTime(0.5, audioCtx.currentTime + delay);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + delay + 0.5);
+                osc.start(audioCtx.currentTime + delay); osc.stop(audioCtx.currentTime + delay + 0.5);
+            };
+            playNote(0); playNote(0.2);
+        }
+    </script>
+</body>
+</html>

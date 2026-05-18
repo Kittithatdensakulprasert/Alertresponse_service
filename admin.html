@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ศูนย์บัญชาการแจ้งเตือนภัยแบบบูรณาการ</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --primary-bg: #111827;
+            --card-bg: #1f2937;
+            --accent: #3b82f6;
+            --danger: #ef4444;
+            --warning: #f97316;
+            --success: #10b981;
+            --text: #f3f4f6;
+            --gray: #9ca3af;
+        }
+
+        body {
+            font-family: 'Prompt', sans-serif;
+            background: var(--primary-bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 320px;
+            background: #111827;
+            border-right: 1px solid #374151;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        /* 1. Filter Styles */
+        .filter-group {
+            margin-top: 15px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .filter-btn {
+            background: #374151;
+            border: 1px solid #4b5563;
+            color: white;
+            padding: 6px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .filter-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .incident-list-container {
+            flex: 1;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .incident-item {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: 0.2s;
+            position: relative;
+        }
+
+        .incident-item:hover {
+            border-color: var(--accent);
+        }
+
+        .incident-item.selected {
+            border-color: var(--accent);
+            background: #1e3a8a;
+        }
+
+        .incident-item.alerted {
+            border-left: 5px solid var(--success);
+            opacity: 0.9;
+        }
+
+        /* New Style for Resolved */
+        .incident-item.resolved {
+            opacity: 0.5;
+            border-left: 5px solid var(--gray);
+            filter: grayscale(0.5);
+        }
+
+        .severity-badge {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            float: right;
+            font-weight: bold;
+        }
+
+        /* Main Section */
+        .main {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 25px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 3. Template Buttons Styles */
+        .template-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .template-btn {
+            flex: 1;
+            padding: 8px;
+            border-radius: 6px;
+            border: none;
+            font-size: 0.8rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+            opacity: 0.8;
+        }
+
+        .template-btn:hover {
+            opacity: 1;
+            transform: translateY(-1px);
+        }
+
+        .t-evac {
+            background: var(--danger);
+            color: white;
+        }
+
+        .t-watch {
+            background: var(--warning);
+            color: white;
+        }
+
+        .t-clear {
+            background: var(--success);
+            color: white;
+        }
+
+        #map {
+            height: 350px;
+            width: 100%;
+            border-radius: 12px;
+            margin-top: 15px;
+            border: 1px solid #374151;
+            z-index: 1;
+        }
+
+        .btn-action {
+            background: var(--danger);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            width: 100%;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+
+        .btn-action:disabled {
+            background: #4b5563 !important;
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+
+        .btn-success {
+            background: var(--success);
+        }
+
+        /* 2. Mark as Resolved Button Style */
+        .btn-resolve {
+            background: none;
+            border: 1px solid var(--gray);
+            color: var(--gray);
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 8px;
+            width: 100%;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+        }
+
+        .btn-resolve:hover {
+            background: #374151;
+            color: white;
+            border-color: white;
+        }
+
+        .stat-box {
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-box h1 {
+            font-size: 2.5rem;
+            margin: 10px 0;
+        }
+
+        .gap-container {
+            display: flex;
+            justify-content: space-around;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #3b82f6;
+        }
+
+        .gap-item {
+            text-align: center;
+        }
+
+        .gap-item small {
+            color: #9ca3af;
+            font-size: 0.8rem;
+        }
+
+        .gap-item div {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+
+        textarea {
+            width: 100%;
+            background: #111827;
+            color: white;
+            border: 1px solid #374151;
+            padding: 12px;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-family: inherit;
+            margin-bottom: 10px;
+            resize: vertical;
+        }
+
+        .user-dot {
+            width: 12px;
+            height: 12px;
+            background-color: #3b82f6;
+            border: 2px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.8);
+        }
+
+        /* 🟢 เพิ่มใหม่: สไตล์สำหรับจุดที่ขอความช่วยเหลือ SOS */
+        .sos-box-clickable {
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s;
+        }
+
+        .sos-box-clickable:hover {
+            background: rgba(239, 68, 68, 0.3);
+            transform: scale(1.02);
+        }
+
+        /* 🟢 เพิ่มใหม่: สไตล์หน้าต่าง Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        .modal-content {
+            background-color: var(--card-bg);
+            margin: 10% auto;
+            padding: 20px;
+            border: 1px solid #3b82f6;
+            width: 400px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #374151;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .close-btn {
+            color: var(--gray);
+            font-size: 28px;
+            cursor: pointer;
+        }
+
+        .close-btn:hover {
+            color: white;
+        }
+
+        .user-list-item {
+            padding: 10px;
+            border-bottom: 1px solid #374151;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .user-list-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+    <div class="sidebar">
+        <h2 style="color: var(--accent); margin-bottom: 5px;">📋 เหตุการณ์บูรณาการ</h2>
+
+        <div class="filter-group">
+            <button class="filter-btn active" onclick="setFilter('ALL', this)">ทั้งหมด</button>
+            <button class="filter-btn" onclick="setFilter('CRITICAL', this)">Critical</button>
+            <button class="filter-btn" onclick="setFilter('ALERTED', this)">แจ้งเตือนแล้ว</button>
+            <button class="filter-btn" onclick="setFilter('ACTIVE', this)">รอการจัดการ</button>
+        </div>
+
+        <div id="incident-list" class="incident-list-container">
+            <p style="opacity:0.5">🔄 กำลังโหลดข้อมูล...</p>
+        </div>
+        <button onclick="loadIncidents()"
+            style="background:none; border:1px solid #444; color:white; cursor:pointer; padding:8px; margin-top:10px; border-radius:5px;">🔄
+            รีเฟรชรายการ</button>
+    </div>
+
+    <div class="main">
+        <h1>ศูนย์บัญชาการแจ้งเตือนภัย (Admin Dashboard)</h1>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <h3>📢 ประกาศแจ้งเตือนภัย</h3>
+                <div id="selected-info"
+                    style="margin-bottom: 20px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; border-left: 4px solid var(--accent);">
+                    <p>กรุณาเลือกเหตุการณ์จากแถบด้านซ้าย</p>
+                </div>
+
+                <div id="form-area" style="display:none">
+                    <div class="template-container" style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <button id="btn-t-evac" class="template-btn t-evac" onclick="applyTemplate('EVAC')"
+                            style="flex: 1; padding: 12px; border-radius: 8px;">🚨 อพยพด่วน</button>
+                        <button id="btn-t-watch" class="template-btn t-watch" onclick="applyTemplate('WATCH')"
+                            style="flex: 1; padding: 12px; border-radius: 8px;">⚠️ เฝ้าระวัง</button>
+                        <button id="btn-t-clear" class="template-btn t-clear" onclick="applyTemplate('CLEAR')"
+                            style="flex: 1; padding: 12px; border-radius: 8px; display: none;">✅ คลี่คลาย</button>
+                    </div>
+
+                    <textarea id="msg-text" rows="4" style="margin-bottom: 15px; border-radius: 10px;"></textarea>
+
+                    <div id="action-buttons-wrapper">
+                        <button id="alert-btn" class="btn-action" onclick="sendAlert()">🚨 ส่งสัญญาณเตือนภัย</button>
+                        <button id="resolve-btn" class="btn-action btn-success" onclick="markResolved()"
+                            style="display: none; margin-top: 0;">✅ ส่งสัญญาณคลี่คลาย & ปิดภารกิจ</button>
+                    </div>
+                </div>
+
+                <h3 style="margin-top:25px">📍 พื้นที่ปฏิบัติการ (SOS Map)</h3>
+                <div id="map"></div>
+            </div>
+
+            <div class="card">
+                <h3>📊 วิเคราะห์ความช่วยเหลือ <span id="stat-title"
+                        style="font-size: 0.9rem; color: var(--accent);"></span></h3>
+
+                <div class="gap-container">
+                    <div class="gap-item">
+                        <small>📡 เบอร์ในพื้นที่</small>
+                        <div id="total-detected" style="color: var(--accent)">0</div>
+                    </div>
+                    <div class="gap-item">
+                        <small>✅ ตอบกลับแล้ว</small>
+                        <div id="total-responded" style="color: var(--success)">0</div>
+                    </div>
+                    <div class="gap-item">
+                        <small>❓ เงียบ/หาย</small>
+                        <div id="total-gap" style="color: var(--danger)">0</div>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="stat-box sos-box-clickable" onclick="showHelpList()"
+                        style="grid-column: span 2; border-bottom: 3px solid var(--danger);">
+                        <p>🆘 ต้องการความช่วยเหลือ (SOS)</p>
+                        <h1 id="stat-help" style="color: var(--danger)">0</h1>
+                        <small style="opacity: 0.6;">คลิกเพื่อดูรายชื่อเบอร์</small>
+                    </div>
+                    <div class="stat-box">
+                        <p>ปลอดภัย</p>
+                        <h1 id="stat-safe" style="color: var(--success)">0</h1>
+                    </div>
+                    <div class="stat-box">
+                        <p>รับทราบ</p>
+                        <h1 id="stat-ack">0</h1>
+                    </div>
+                </div>
+                <p id="update-time" style="font-size: 0.7rem; text-align: right; margin-top: 15px; opacity: 0.5;"></p>
+            </div>
+        </div>
+    </div>
+
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 style="margin:0; color: var(--danger);">🆘 รายชื่อเบอร์ที่ขอความช่วยเหลือ</h3>
+                <span class="close-btn" onclick="closeModal()">&times;</span>
+            </div>
+            <div id="modal-list-body" style="max-height: 400px; overflow-y: auto;">
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const API_BASE_URL = "https://1y2hd4pope.execute-api.us-east-1.amazonaws.com/v1";
+
+        let currentSelectedIncident = null;
+        let statsInterval = null;
+        let map = null;
+        let markersLayer = L.layerGroup();
+        let allIncidents = [];
+        let currentFilter = 'ALL';
+
+        // ✅ แก้ไขใหม่: ฟังก์ชันดึงรายชื่อจาก API จริง
+        async function showHelpList() {
+            if (!currentSelectedIncident) return;
+
+            const listBody = document.getElementById('modal-list-body');
+            listBody.innerHTML = '<p style="text-align:center; padding: 20px;">🔄 กำลังโหลดรายชื่อจากระบบ...</p>';
+            document.getElementById('helpModal').style.display = 'block';
+
+            try {
+                // ดึงข้อมูลการตอบกลับทั้งหมดของ Alert ล่าสุดที่ผูกกับ Incident นี้
+                const res = await fetch(`${API_BASE_URL}/alerts/latest?incidentId=${currentSelectedIncident.incidentId}`);
+                const alertData = await res.json();
+                const alertInfo = alertData.body ? JSON.parse(alertData.body) : alertData;
+
+                if (!alertInfo || !alertInfo.alertId) {
+                    listBody.innerHTML = '<p style="text-align:center; opacity:0.5; padding: 20px;">ไม่พบข้อมูลการแจ้งเตือน</p>';
+                    return;
+                }
+
+                // ดึงรายชื่อคนตอบกลับจากตาราง ResponseData
+                const responseRes = await fetch(`${API_BASE_URL}/alerts/${alertInfo.alertId}/responses`);
+                const responses = await responseRes.json();
+
+                // กรองเฉพาะคนที่กด HELP (เบอร์ 3)
+                const helpList = responses.filter(r => r.replyText === "HELP" || r.replyText === "3" || r.replyText === "NEED_HELP");
+
+                listBody.innerHTML = '';
+                if (helpList.length === 0) {
+                    listBody.innerHTML = '<p style="text-align:center; opacity:0.5; padding: 20px;">ไม่มีใครกดขอความช่วยเหลือในขณะนี้</p>';
+                } else {
+                    helpList.forEach(user => {
+                        const div = document.createElement('div');
+                        div.className = 'user-list-item';
+                        div.innerHTML = `
+                            <span>📞 <b>${user.responseId || user.phoneNumber || 'ไม่ระบุเบอร์'}</b></span>
+                            <span style="color: var(--danger); font-size: 0.8rem; font-weight: bold;">[SOS]</span>
+                        `;
+                        listBody.appendChild(div);
+                    });
+                }
+            } catch (e) {
+                console.error("Fetch Error:", e);
+                listBody.innerHTML = '<p style="text-align:center; color: var(--danger); padding: 20px;">❌ เกิดข้อผิดพลาดในการดึงข้อมูล</p>';
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('helpModal').style.display = 'none';
+        }
+
+        window.onclick = function (event) {
+            if (event.target == document.getElementById('helpModal')) closeModal();
+        }
+
+        function setFilter(type, btn) {
+            currentFilter = type;
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderIncidentList();
+        }
+
+        function applyTemplate(type) {
+            const txt = document.getElementById('msg-text');
+            const typeName = currentSelectedIncident ? currentSelectedIncident.incidentType : "เหตุการณ์";
+            const loc = currentSelectedIncident ? currentSelectedIncident.location : "พื้นที่";
+
+            if (type === 'EVAC') txt.value = `🚨 [ประกาศอพยพด่วน] เนื่องจากเกิด${typeName} ในพื้นที่ ${loc} ขอให้ประชาชนออกจากพื้นที่ทันทีเพื่อความปลอดภัย`;
+            if (type === 'WATCH') txt.value = `⚠️ [ประกาศเฝ้าระวัง] ขณะนี้เกิด${typeName} ในพื้นที่ ${loc} โปรดติดตามข่าวสารอย่างใกล้ชิดและเตรียมพร้อมอพยพ`;
+            if (type === 'CLEAR') txt.value = `✅ [สถานการณ์คลี่คลาย] เหตุการณ์${typeName} ในพื้นที่ ${loc} ได้เข้าสู่สภาวะปกติแล้ว ท่านสามารถกลับเข้าที่พักได้`;
+        }
+
+        async function loadIncidents() {
+            const listDiv = document.getElementById('incident-list');
+            listDiv.innerHTML = '<p style="opacity:0.5; text-align:center; margin-top:20px;">🔄 กำลังโหลดข้อมูลใหม่...</p>';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/incidents`, { cache: 'no-store' });
+                const data = await response.json();
+                allIncidents = data.Items || data;
+                allIncidents.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+                renderIncidentList();
+            } catch (e) {
+                listDiv.innerHTML = "<p style='text-align:center; color:#ef4444;'>❌ โหลดไม่สำเร็จ</p>";
+            }
+        }
+
+        function renderIncidentList() {
+            const listDiv = document.getElementById('incident-list');
+            listDiv.innerHTML = "";
+
+            const filtered = allIncidents.filter(item => {
+                if (currentFilter === 'ALL') return item.status !== 'RESOLVED';
+                if (currentFilter === 'CRITICAL') return item.severity === 'CRITICAL' || item.severity === 'HIGH';
+                if (currentFilter === 'ALERTED') return item.status === 'ALERTED';
+                if (currentFilter === 'ACTIVE') return item.status === 'ACTIVE';
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                listDiv.innerHTML = "<p style='text-align:center; opacity:0.5; margin-top:20px;'>📭 ไม่พบรายการ</p>";
+                return;
+            }
+
+            filtered.forEach(item => {
+                const isAlerted = item.status === 'ALERTED';
+                const isResolved = item.status === 'RESOLVED';
+                const div = document.createElement('div');
+                div.className = `incident-item ${isAlerted ? 'alerted' : ''} ${isResolved ? 'resolved' : ''} ${currentSelectedIncident?.incidentId === item.incidentId ? 'selected' : ''}`;
+                div.onclick = () => selectIncident(item);
+                div.innerHTML = `
+                    <span class="severity-badge" style="background:${getSevColor(item.severity)}">${item.severity}</span>
+                    <strong>${isAlerted ? "✅ " : ""}${item.incidentType}</strong><br>
+                    <small>📍 ${item.location}</small>
+                `;
+                listDiv.appendChild(div);
+            });
+        }
+
+        function selectIncident(item) {
+            if (statsInterval) {
+                clearInterval(statsInterval);
+                statsInterval = null;
+            }
+
+            // Reset ตัวเลขสถิติ
+            document.getElementById('stat-help').innerText = "0";
+            document.getElementById('stat-safe').innerText = "0";
+            document.getElementById('stat-ack').innerText = "0";
+            document.getElementById('total-detected').innerText = "0";
+            document.getElementById('total-responded').innerText = "0";
+            document.getElementById('total-gap').innerText = "0";
+
+            currentSelectedIncident = item;
+            renderIncidentList();
+
+            // แสดงข้อมูล Incident ด้านบน
+            const popText = item.estimatedAffectedPopulation
+                ? item.estimatedAffectedPopulation.toLocaleString() + " คน"
+                : "กำลังประเมิน";
+
+            document.getElementById('selected-info').innerHTML = `
+        <h2 style="margin:0; color:var(--accent)">${item.incidentType}</h2>
+        <p>พื้นที่: ${item.location} | รัศมี: ${item.impactRadius || 5} กม.</p>
+        <p style="margin-top:8px; color:var(--warning);"><b>👥 ประชากรที่อาจได้รับผลกระทบ:</b> ${popText}</p>
+        <small>ID: ${item.incidentId}</small>
+    `;
+
+            document.getElementById('stat-title').innerText = `(ID: ${item.incidentId})`;
+            document.getElementById('form-area').style.display = 'block';
+
+            // ดึง Element ต่างๆ มาเตรียมจัดการ
+            const alertBtn = document.getElementById('alert-btn');
+            const resolveBtn = document.getElementById('resolve-btn');
+            const msgTxt = document.getElementById('msg-text');
+            const tEvac = document.getElementById('btn-t-evac');
+            const tWatch = document.getElementById('btn-t-watch');
+            const tClear = document.getElementById('btn-t-clear');
+
+            if (item.status === 'ALERTED') {
+                // --- สถานะ: แจ้งเตือนไปแล้ว ---
+                // ซ่อนปุ่มที่ไม่เกี่ยวข้อง
+                tEvac.style.display = 'none';
+                tWatch.style.display = 'none';
+                alertBtn.style.display = 'none';
+
+                // แสดงปุ่มคลี่คลาย
+                tClear.style.display = 'block';
+                resolveBtn.style.display = 'block';
+
+                // เตรียมข้อความคลี่คลาย
+                applyTemplate('CLEAR');
+                msgTxt.disabled = false;
+
+                // เริ่มดึงสถิติ
+                monitorStats(item.incidentId);
+                statsInterval = setInterval(() => monitorStats(item.incidentId), 5000);
+            } else {
+                // --- สถานะ: รอการจัดการ (ACTIVE) ---
+                // แสดงปุ่มแจ้งเตือนปกติ
+                tEvac.style.display = 'block';
+                tWatch.style.display = 'block';
+                alertBtn.style.display = 'block';
+                alertBtn.disabled = false;
+                alertBtn.innerText = "🚨 ส่งสัญญาณเตือนภัย";
+
+                // ซ่อนปุ่มคลี่คลาย
+                tClear.style.display = 'none';
+                resolveBtn.style.display = 'none';
+
+                // ข้อความเริ่มต้น
+                msgTxt.value = `📢 แจ้งเหตุ ${item.incidentType} พื้นที่ ${item.location} โปรดระวัง`;
+                msgTxt.disabled = false;
+
+                runGapAnalysis(item, 0, 0, 0);
+            }
+
+            initMap(item);
+        }
+
+        async function markResolved() {
+            if (!currentSelectedIncident) return;
+
+            // ดึงข้อความจาก Textarea (เช่น "ขณะนี้สถานการณ์คลี่คลายแล้ว...")
+            const msg = document.getElementById('msg-text').value;
+
+            if (!confirm("ยืนยันการส่งสัญญาณ 'คลี่คลายสถานการณ์' และปิดภารกิจใช่หรือไม่?")) return;
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/alerts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        incidentId: currentSelectedIncident.incidentId,
+                        message: msg,       // ส่งข้อความประกาศจริง
+                        status: "RESOLVED"  // ส่งสถานะปิดงาน
+                    })
+                });
+
+                if (res.ok) {
+                    alert("✅ ส่งสัญญาณคลี่คลายและปิดภารกิจสำเร็จ");
+
+                    // ล้างหน้าจอและรีโหลดรายการ
+                    currentSelectedIncident = null;
+                    document.getElementById('form-area').style.display = 'none';
+                    if (map) markersLayer.clearLayers();
+
+                    await loadIncidents(); // รีโหลดรายการด้านซ้าย (เพื่อให้รายการที่ RESOLVED แล้วหายไปตาม Filter)
+                } else {
+                    const errData = await res.json();
+                    alert("❌ ไม่สามารถปิดภารกิจได้: " + (errData.error || "Unknown Error"));
+                }
+            } catch (e) {
+                console.error("Resolve Error:", e);
+                alert("❌ เกิดข้อผิดพลาดการเชื่อมต่อ");
+            }
+        }
+
+
+        function initMap(item) {
+            const lat = parseFloat(item.lat) || 14.0635;
+            const lon = parseFloat(item.long) || 100.6092;
+            const impactColor = getSevColor(item.severity);
+
+            if (!map) {
+                map = L.map('map').setView([lat, lon], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                markersLayer.addTo(map);
+            }
+
+            markersLayer.clearLayers();
+
+            let areaData = item.affectedArea;
+            if (typeof areaData === 'string') {
+                try { areaData = JSON.parse(areaData); } catch (e) { }
+            }
+
+            if (areaData && areaData.type === "Polygon" && areaData.coordinates) {
+                const latLngs = areaData.coordinates[0].map(coord => [coord[1], coord[0]]);
+                const polygon = L.polygon(latLngs, {
+                    color: impactColor, weight: 3, dashArray: '8, 8', fillColor: impactColor, fillOpacity: 0.15
+                }).addTo(markersLayer);
+                map.fitBounds(polygon.getBounds(), { padding: [20, 20] });
+            } else {
+                const radiusMeters = (parseFloat(item.impactRadius) || 5) * 1000;
+                L.circle([lat, lon], {
+                    color: impactColor, weight: 3, dashArray: '8, 8', fillOpacity: 0.15, radius: radiusMeters
+                }).addTo(markersLayer);
+                map.setView([lat, lon], 12);
+            }
+
+            L.circle([lat, lon], {
+                color: '#ef4444', weight: 0, fillColor: '#ef4444', fillOpacity: 0.6, radius: 400
+            }).addTo(markersLayer).bindPopup(`<b>ศูนย์กลางการเกิดเหตุ</b>`);
+        }
+
+        async function runGapAnalysis(incident, currentHelpCount, currentSafeCount, currentAckCount) {
+            try {
+                const res = await fetch(`${API_BASE_URL}/users`);
+                const data = await res.json();
+                const users = data.Items || data || [];
+
+                const centerLat = parseFloat(incident.lat);
+                const centerLon = parseFloat(incident.long);
+                const radius = parseFloat(incident.impactRadius) || 10;
+
+                let inZoneCount = 0;
+
+                const userIcon = L.divIcon({
+                    className: 'custom-user-icon',
+                    html: '<div class="user-dot"></div>',
+                    iconSize: [12, 12],
+                    iconAnchor: [6, 6]
+                });
+
+                users.forEach(u => {
+                    const uLat = parseFloat(u.lat);
+                    const uLon = parseFloat(u.long);
+                    if (!isNaN(uLat) && !isNaN(uLon)) {
+                        const dist = calculateDistance(centerLat, centerLon, uLat, uLon);
+                        if (dist <= radius) {
+                            inZoneCount++;
+                            L.marker([uLat, uLon], { icon: userIcon })
+                                .addTo(markersLayer)
+                                .bindPopup(`<b>เบอร์ในพื้นที่</b><br>เบอร์: ${u.phone || 'ไม่ระบุ'}<br>ระยะห่าง: ${dist.toFixed(2)} กม.`);
+                        }
+                    }
+                });
+
+                const totalResponded = currentHelpCount + currentSafeCount + currentAckCount;
+                let gapCount = incident.status === 'ALERTED' ? Math.max(0, inZoneCount - totalResponded) : 0;
+
+                document.getElementById('total-detected').innerText = inZoneCount;
+                document.getElementById('total-responded').innerText = totalResponded;
+                document.getElementById('total-gap').innerText = gapCount;
+
+            } catch (e) { console.error("Gap Error", e); }
+        }
+
+        async function sendAlert() {
+            if (!currentSelectedIncident) return;
+            if (!confirm("ยืนยันการส่งสัญญาณเตือนภัยไปยังประชาชนในพื้นที่?")) return;
+
+            const btn = document.getElementById('alert-btn');
+            const msg = document.getElementById('msg-text').value;
+            btn.disabled = true;
+            btn.innerText = "🚀 กำลังส่งสัญญาณ...";
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/alerts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        incidentId: currentSelectedIncident.incidentId,
+                        message: msg
+                    })
+                });
+
+                if (res.ok) {
+                    alert("✅ ส่งสัญญาณแจ้งเตือนสำเร็จ!");
+                    loadIncidents();
+                } else {
+                    alert("❌ ล้มเหลว");
+                    btn.disabled = false;
+                    btn.innerText = "🚨 ส่งสัญญาณเตือนภัย";
+                }
+            } catch (e) {
+                alert("❌ ข้อผิดพลาดการเชื่อมต่อ");
+                btn.disabled = false;
+            }
+        }
+
+        async function monitorStats(id) {
+            try {
+                const res = await fetch(`${API_BASE_URL}/alerts/latest?incidentId=${id}`);
+                const data = await res.json();
+                const alertInfo = data.body ? JSON.parse(data.body) : data;
+
+                if (alertInfo) {
+                    const h = alertInfo.totalNeedHelp || 0;
+                    const s = alertInfo.totalSafe || 0;
+                    const a = alertInfo.totalAcknowledged || 0;
+
+                    document.getElementById('stat-help').innerText = h;
+                    document.getElementById('stat-safe').innerText = s;
+                    document.getElementById('stat-ack').innerText = a;
+                    document.getElementById('update-time').innerText = "อัปเดต: " + new Date().toLocaleTimeString();
+
+                    if (currentSelectedIncident) runGapAnalysis(currentSelectedIncident, h, s, a);
+                }
+            } catch (e) { }
+        }
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        function getSevColor(s) {
+            const sev = (s || '').toUpperCase();
+            if (sev === 'HIGH' || sev === 'CRITICAL') return '#ef4444';
+            if (sev === 'MEDIUM' || sev === 'WARNING') return '#f97316';
+            return '#eab308';
+        }
+
+        loadIncidents();
+    </script>
+</body>
+
+</html>
